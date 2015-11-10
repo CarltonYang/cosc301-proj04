@@ -8,7 +8,8 @@ struct rtcdate;
 struct spinlock;
 struct stat;
 struct superblock;
-
+int 		join(int pid);
+int 		clone(int fcn,int arg,int stack);
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);

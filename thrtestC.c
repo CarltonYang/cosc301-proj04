@@ -1,7 +1,7 @@
 /* thread user library functions */
 #include "types.h"
 #include "user.h"
-
+/*
 #undef NULL
 #define NULL ((void*)0)
 
@@ -66,3 +66,5 @@ void worker(void *arg_ptr) {
 
   exit();
 }
+
+*/
