@@ -162,7 +162,7 @@ fork(void)
   acquire(&ptable.lock);
   np->state = RUNNABLE;
   release(&ptable.lock);
-  
+  np->isthread=0;
   return pid;
 }
 
@@ -224,8 +224,9 @@ wait(void)
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc)
+      if(p->parent != proc )
         continue;
+      
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
@@ -250,7 +251,10 @@ wait(void)
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(proc, &ptable.lock);  //DOC: wait-sleep
+    if (p->isthread !=1)
+    	{sleep(proc, &ptable.lock);}
+    else 
+	{return -1;}  //DOC: wait-sleep
   }
 }
 
@@ -530,9 +534,9 @@ clone(int fcn, int arg, int stack)
 
 int join(int pid)
 {
-  if (proc->isthread ==1)
+  if (proc->isthread ==0)   //check if calling process is thread
     return -1;
-  if (proc->pid ==pid)
+  if (proc->pid ==pid)	    //check if calling process is calling its own id
     return -1;
 
   struct proc *p;
@@ -543,14 +547,16 @@ int join(int pid)
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc)
+      if(p->parent != proc)	//check if the process is the child of calling process
         continue;
-      if (p-> isthread !=1)
+      if (p-> isthread !=1)  //check if the thread is thread 
+	continue;
+      if (p->pid != pid && pid !=1)  //check if it matches the pid and pid isnt -1, where we wait for all
 	continue;
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        pid = p->pid;
+        //pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
         freevm(p->pgdir);
