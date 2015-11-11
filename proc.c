@@ -109,6 +109,7 @@ growproc(int n)
 {
   uint sz;
   
+  
   sz = proc->sz;
   if(n > 0){
     if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
@@ -118,7 +119,38 @@ growproc(int n)
       return -1;
   }
   proc->sz = sz;
+
+ // acquire(&ptable.lock);
+  struct proc *p;
+  if (proc->isthread ==1)
+  {
+	proc->parent->sz=sz;
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+		if (p->parent==proc)
+		{
+			p->sz=sz;
+		}
+	}
+  }
+  else 	
+  {
+	
+		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+		{
+			if (p->parent==proc)
+			{
+				p->sz=sz;
+			}	
+		}
+	
+  }
+
+
+
+
+  //release(&ptable.lock);
   switchuvm(proc);
+  
   return 0;
 }
 
@@ -162,7 +194,9 @@ fork(void)
   acquire(&ptable.lock);
   np->state = RUNNABLE;
   release(&ptable.lock);
+  //initialize the new added value for the new process
   np->isthread=0;
+  //np->visit=1;
   return pid;
 }
 
@@ -174,6 +208,27 @@ exit(void)
 {
   struct proc *p;
   int fd;
+  
+  if (proc->isthread==0)
+  {
+	struct proc *p;
+
+        //acquire(&ptable.lock);
+  	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	  if(p->parent->pid == proc->pid){
+  	    p->killed = 1;
+  	    // Wake process from sleep if necessary.
+  	    if(p->state == SLEEPING)
+  	      {p->state = RUNNABLE;}
+            join(p->pid);
+  	   // release(&ptable.lock);
+  	    //return 0;
+  	  }
+ 	 }
+ 	// release(&ptable.lock);
+  //return -1;
+
+  }
 
   if(proc == initproc)
     panic("init exiting");
@@ -233,6 +288,7 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
+	//if (p->visit==1)
         freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;
@@ -251,7 +307,7 @@ wait(void)
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    if (p->isthread !=1)
+    if (p->isthread ==0)
     	{sleep(proc, &ptable.lock);}
     else 
 	{return -1;}  //DOC: wait-sleep
@@ -507,7 +563,11 @@ clone(int fcn, int arg, int stack)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
+
+//for new checks
   np->isthread= 1;
+  //proc->visit++;
+  //np->visit=1;
   // lock to force the compiler to emit the np->state write last.
   //acquire(&ptable.lock);
   //np->state = RUNNABLE;
@@ -534,29 +594,41 @@ clone(int fcn, int arg, int stack)
 
 int join(int pid)
 {
-  if (proc->isthread ==0)   //check if calling process is thread
+  if (proc->isthread == 1) //check if it's called by a thread
     return -1;
-  if (proc->pid ==pid)	    //check if calling process is calling its own id
+  if (proc->pid == pid)//check if it's called on the parent process's pid 
     return -1;
 
   struct proc *p;
-  int havekids ;//, pid;
+  int locate_p; //counter to check if we can locate the input "pid" in the process table
+  int havekids, p_pid;
 
   acquire(&ptable.lock);
+  locate_p = 0;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ 
+	//loop through process table to look for struct proc with pid that matches the input pid 
+	if (p->pid == pid){
+		locate_p ++;
+		break;
+	}
+  }
+  if (pid == -1) {//if pid = -1, we don't want to return -1, so have to increment locate_p
+	locate_p++; 
+  }
+  if (locate_p == 0) {
+	return -1;
+  }
+  
   for(;;){
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc)	//check if the process is the child of calling process
+      if(p->parent != proc || p->isthread != 1)
         continue;
-      if (p-> isthread !=1)  //check if the thread is thread 
-	continue;
-      if (p->pid != pid && pid !=1)  //check if it matches the pid and pid isnt -1, where we wait for all
-	continue;
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        //pid = p->pid;
+        p_pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
         freevm(p->pgdir);
@@ -566,7 +638,7 @@ int join(int pid)
         p->name[0] = 0;
         p->killed = 0;
         release(&ptable.lock);
-        return pid;
+        return p_pid;
       }
     }
 
@@ -581,4 +653,3 @@ int join(int pid)
   }
 
 }
-
