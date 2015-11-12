@@ -100,6 +100,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->isthread = 0;
 }
 
 // Grow current process's memory by n bytes.
@@ -108,7 +109,6 @@ int
 growproc(int n)
 {
   uint sz;
-  
   
   sz = proc->sz;
   if(n > 0){
@@ -119,38 +119,7 @@ growproc(int n)
       return -1;
   }
   proc->sz = sz;
-
- // acquire(&ptable.lock);
-  struct proc *p;
-  if (proc->isthread ==1)
-  {
-	proc->parent->sz=sz;
-	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-		if (p->parent==proc)
-		{
-			p->sz=sz;
-		}
-	}
-  }
-  else 	
-  {
-	
-		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-		{
-			if (p->parent==proc)
-			{
-				p->sz=sz;
-			}	
-		}
-	
-  }
-
-
-
-
-  //release(&ptable.lock);
   switchuvm(proc);
-  
   return 0;
 }
 
@@ -189,14 +158,12 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
-
+  np->isthread = 0;
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
   np->state = RUNNABLE;
   release(&ptable.lock);
-  //initialize the new added value for the new process
-  np->isthread=0;
-  //np->visit=1;
+  
   return pid;
 }
 
@@ -208,27 +175,6 @@ exit(void)
 {
   struct proc *p;
   int fd;
-  
-  if (proc->isthread==0)
-  {
-	struct proc *p;
-
-        //acquire(&ptable.lock);
-  	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  	  if(p->parent->pid == proc->pid){
-  	    p->killed = 1;
-  	    // Wake process from sleep if necessary.
-  	    if(p->state == SLEEPING)
-  	      {p->state = RUNNABLE;}
-            join(p->pid);
-  	   // release(&ptable.lock);
-  	    //return 0;
-  	  }
- 	 }
- 	// release(&ptable.lock);
-  //return -1;
-
-  }
 
   if(proc == initproc)
     panic("init exiting");
@@ -273,22 +219,20 @@ wait(void)
 {
   struct proc *p;
   int havekids, pid;
-
+  
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc )
+      if(p->parent != proc || p->isthread==1)
         continue;
-      
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-	//if (p->visit==1)
         freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;
@@ -307,10 +251,8 @@ wait(void)
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    if (p->isthread ==0)
-    	{sleep(proc, &ptable.lock);}
-    else 
-	{return -1;}  //DOC: wait-sleep
+
+    sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
 }
 
@@ -563,15 +505,13 @@ clone(int fcn, int arg, int stack)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
-
-//for new checks
   np->isthread= 1;
-  //proc->visit++;
-  //np->visit=1;
   // lock to force the compiler to emit the np->state write last.
-  //acquire(&ptable.lock);
-  //np->state = RUNNABLE;
-  //release(&ptable.lock);
+  /*
+  acquire(&ptable.lock);
+  np->state = RUNNABLE;
+  release(&ptable.lock);
+  */
   
 //temporary array to copy into the bottom of news tack 
 //for the thread(i.e.,to the high address in stack 
@@ -653,3 +593,4 @@ int join(int pid)
   }
 
 }
+
