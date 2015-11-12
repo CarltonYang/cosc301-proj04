@@ -175,6 +175,20 @@ exit(void)
 {
   struct proc *p;
   int fd;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	  if(p->parent->pid == proc->pid &&p->isthread==1){
+  	    p->killed = 1;
+  	    // Wake process from sleep if necessary.
+  	    if(p->state == SLEEPING)
+  	      {p->state = RUNNABLE;}
+            join(p->pid);
+  	    release(&ptable.lock);
+  	    //return 0;
+  	  }
+      release(&ptable.lock);
+ 	 }
+  
 
   if(proc == initproc)
     panic("init exiting");
