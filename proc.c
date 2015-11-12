@@ -12,6 +12,8 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+
+  struct spinlock threadlock;
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -24,7 +26,9 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&threadlock, "thread");
 }
+
 
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
@@ -110,6 +114,7 @@ growproc(int n)
 {
   uint sz;
   
+  acquire(&threadlock);
   sz = proc->sz;
   if(n > 0){
     if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
@@ -119,6 +124,42 @@ growproc(int n)
       return -1;
   }
   proc->sz = sz;
+  
+
+
+
+  //change sz for parent or child threads
+  acquire(&ptable.lock);
+  struct proc *p;
+  if (proc->isthread ==1)
+  {
+	proc->parent->sz=proc->sz;
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+	{
+		if (p->parent==proc)
+		{
+			p->sz=proc->sz;
+		}
+	}
+  }
+  else 	
+  {
+	
+		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+		{
+			if (p->parent==proc)
+			{
+				p->sz=proc->sz;
+			}	
+		}
+	
+  }
+
+
+
+
+  release(&ptable.lock);
+  release(&threadlock);
   switchuvm(proc);
   return 0;
 }
@@ -175,20 +216,23 @@ exit(void)
 {
   struct proc *p;
   int fd;
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  	  if(p->parent->pid == proc->pid &&p->isthread==1){
+  /*
+  //acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+  	  if(p->parent->pid == proc->pid && p->isthread==1)
+	  {
   	    p->killed = 1;
   	    // Wake process from sleep if necessary.
   	    if(p->state == SLEEPING)
   	      {p->state = RUNNABLE;}
             join(p->pid);
-  	    release(&ptable.lock);
+  	    //release(&ptable.lock);
   	    //return 0;
   	  }
-      release(&ptable.lock);
- 	 }
-  
+      //release(&ptable.lock);
+  }
+  */
 
   if(proc == initproc)
     panic("init exiting");
@@ -214,6 +258,18 @@ exit(void)
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == proc){
+ /*
+      if (p->isthread==1)
+      {
+        p->killed = 1;
+  	    // Wake process from sleep if necessary.
+  	    if(p->state == SLEEPING)
+  	      {p->state = RUNNABLE;}
+            join(p->pid);
+  	    //release(&ptable.lock);
+  	    //return 0;
+      }
+ */
       p->parent = initproc;
       if(p->state == ZOMBIE)
         wakeup1(initproc);
