@@ -7,7 +7,7 @@
 
 #define PGSIZE (4096)
 
-/*
+
 int ppid;
 int num_threads = 8;
 int global = 0;
@@ -85,4 +85,4 @@ void worker(void *arg_ptr) {
   lock_release(&xlock);
   exit();
 }
-*/
+
