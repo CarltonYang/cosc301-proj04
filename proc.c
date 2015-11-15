@@ -99,7 +99,7 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
-
+  p->isthread=0;
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
@@ -136,7 +136,7 @@ growproc(int n)
 	proc->parent->sz=proc->sz;
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
 	{
-		if (p->parent==proc)
+		if (p->parent==proc && p->isthread ==1)
 		{
 			p->sz=proc->sz;
 		}
@@ -147,7 +147,7 @@ growproc(int n)
 	
 		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
 		{
-			if (p->parent==proc)
+			if (p->parent==proc && p->isthread ==1)
 			{
 				p->sz=proc->sz;
 			}	
@@ -216,23 +216,25 @@ exit(void)
 {
   struct proc *p;
   int fd;
-  /*
-  //acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  if (proc->isthread!=1)
   {
-  	  if(p->parent->pid == proc->pid && p->isthread==1)
-	  {
-  	    p->killed = 1;
-  	    // Wake process from sleep if necessary.
-  	    if(p->state == SLEEPING)
-  	      {p->state = RUNNABLE;}
-            join(p->pid);
-  	    //release(&ptable.lock);
-  	    //return 0;
-  	  }
-      //release(&ptable.lock);
+  //acquire(&ptable.lock);
+  	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+ 	 {
+  		  if(p->parent == proc && p->isthread==1)
+		  {
+  		    p->killed = 1;
+	  	    // Wake process from sleep if necessary.
+	  	    if(p->state == SLEEPING)
+	  	      {p->state = RUNNABLE;}
+	            join(p->pid);
+	  	    //release(&ptable.lock);
+	  	    
+	  	  }
+	      //release(&ptable.lock);
+	  }
   }
-  */
+  
 
   if(proc == initproc)
     panic("init exiting");
@@ -255,24 +257,17 @@ exit(void)
   // Parent might be sleeping in wait().
   wakeup1(proc->parent);
 
+  
+
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == proc){
- /*
-      if (p->isthread==1)
-      {
-        p->killed = 1;
-  	    // Wake process from sleep if necessary.
-  	    if(p->state == SLEEPING)
-  	      {p->state = RUNNABLE;}
-            join(p->pid);
-  	    //release(&ptable.lock);
-  	    //return 0;
-      }
- */
+ 
+      
       p->parent = initproc;
       if(p->state == ZOMBIE)
         wakeup1(initproc);
+
     }
   }
 
@@ -295,15 +290,19 @@ wait(void)
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc || p->isthread==1)
+      if(p->parent != proc && p->isthread==1)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
+	if (p->isthread !=1)
+	{
         kfree(p->kstack);
+	freevm(p->pgdir);
+	}
         p->kstack = 0;
-        freevm(p->pgdir);
+        
         p->state = UNUSED;
         p->pid = 0;
         p->parent = 0;
@@ -325,7 +324,6 @@ wait(void)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
 }
-
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -546,10 +544,11 @@ clone(int fcn, int arg, int stack)
 {
   int i, pid;
   struct proc *np;
-
   // Allocate process.
   if((np = allocproc()) == 0)
     return -1;
+  if ((stack% PGSIZE)!=0 ||fcn==0 ||stack==0)
+	return -1;
   /*
   // Copy process state from p.
   if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
@@ -639,9 +638,9 @@ int join(int pid)
       if(p->state == ZOMBIE){
         // Found one.
         p_pid = p->pid;
-        kfree(p->kstack);
+        //kfree(p->kstack);
         p->kstack = 0;
-        freevm(p->pgdir);
+        //freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;
         p->parent = 0;

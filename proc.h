@@ -68,7 +68,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   //int stack;		       // Stack of a thread
   int isthread;		       //indicate if one is thread or process
-  //int visit;		       //indicate if the process is on the last reference
+  int visit;		       //indicate if the process is on the last reference
 };
 
 // Process memory is laid out contiguously, low addresses first:
