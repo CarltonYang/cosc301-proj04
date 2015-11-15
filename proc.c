@@ -104,6 +104,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  // set initial process to be not a thread
   p->isthread = 0;
 }
 
@@ -131,6 +132,7 @@ growproc(int n)
   //change sz for parent or child threads
   acquire(&ptable.lock);
   struct proc *p;
+  //if thead changes sz, change it for parent and other children
   if (proc->isthread ==1)
   {
 	proc->parent->sz=proc->sz;
@@ -142,6 +144,7 @@ growproc(int n)
 		}
 	}
   }
+  //if parent changes sz, just change sz for children
   else 	
   {
 	
@@ -199,6 +202,7 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
+  //make sure that processes are not threads
   np->isthread = 0;
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
@@ -216,6 +220,8 @@ exit(void)
 {
   struct proc *p;
   int fd;
+
+  //kill all children for a process to end
   if (proc->isthread!=1)
   {
   //acquire(&ptable.lock);
@@ -290,12 +296,14 @@ wait(void)
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    //do not wait for threads
       if(p->parent != proc && p->isthread==1)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
+    //only free addr space if it is not a thread
 	if (p->isthread !=1)
 	{
         kfree(p->kstack);
@@ -547,7 +555,9 @@ clone(int fcn, int arg, int stack)
   // Allocate process.
   if((np = allocproc()) == 0)
     return -1;
-  if ((stack% PGSIZE)!=0 ||fcn==0 ||stack==0)
+  //check if stack is one page sized and page aligned
+
+  if ((stack% PGSIZE)!=0 ||fcn ==0||stack==0)
 	return -1;
   /*
   // Copy process state from p.
@@ -558,6 +568,7 @@ clone(int fcn, int arg, int stack)
     return -1;
   }
   */
+  //initialize thread
   np->pgdir = proc->pgdir;
   np->sz = proc->sz;
   np->parent = proc;
@@ -638,6 +649,7 @@ int join(int pid)
       if(p->state == ZOMBIE){
         // Found one.
         p_pid = p->pid;
+        //do not free addr space since it is called by a thread
         //kfree(p->kstack);
         p->kstack = 0;
         //freevm(p->pgdir);
