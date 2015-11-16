@@ -220,25 +220,24 @@ exit(void)
 {
   struct proc *p;
   int fd;
-
+ 
   //kill all children for a process to end
-  if (proc->isthread!=1)
-  {
-  //acquire(&ptable.lock);
-  	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
- 	 {
-  		  if(p->parent == proc && p->isthread==1)
-		  {
+  if (proc->isthread!=1){
+        acquire(&ptable.lock);
+  	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+  		  if(p->parent == proc && p->isthread==1){
   		    p->killed = 1;
 	  	    // Wake process from sleep if necessary.
 	  	    if(p->state == SLEEPING)
 	  	      {p->state = RUNNABLE;}
-	            join(p->pid);
-	  	    //release(&ptable.lock);
-	  	    
-	  	  }
-	      //release(&ptable.lock);
-	  }
+	            
+	  	    continue;
+	  	     }
+	 }       
+         release(&ptable.lock);
+	 while (join(-1)!=-1){
+		join(-1);
+	 }
   }
   
 
@@ -306,9 +305,10 @@ wait(void)
     //only free addr space if it is not a thread
 	if (p->isthread !=1)
 	{
-        kfree(p->kstack);
+        
 	freevm(p->pgdir);
 	}
+  	kfree(p->kstack);
         p->kstack = 0;
         
         p->state = UNUSED;
@@ -553,22 +553,15 @@ clone(int fcn, int arg, int stack)
   int i, pid;
   struct proc *np;
   // Allocate process.
-  if((np = allocproc()) == 0)
-    return -1;
+  if((np = allocproc()) == 0){
+    cprintf( "alloc failure \n");
+    return -1;}
   //check if stack is one page sized and page aligned
 
-  if ((stack% PGSIZE)!=0 ||fcn ==0||stack==0)
-	return -1;
-  /*
-  // Copy process state from p.
-  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
-    return -1;
-  }
-  */
-  //initialize thread
+  if ((stack% PGSIZE)!=0 ||stack==0 ||fcn==0){
+	cprintf("argument check failure \n");
+	return -1;}
+  
   np->pgdir = proc->pgdir;
   np->sz = proc->sz;
   np->parent = proc;
@@ -603,28 +596,33 @@ clone(int fcn, int arg, int stack)
 	sp-=8;//stack grows down by 2 ints/8 bytes 
 	if(copyout(np->pgdir,sp,ustack,8)<0){ 
 	//failed to copy bottom of stack into newtask
+ 	 cprintf( "copy stack failure \n");
 		return-1; }
 	np->tf->eip=fcn; 
 	np->tf->esp=sp; 
 	switchuvm(np); 
-	np->state=RUNNABLE;
+        acquire(&ptable.lock);
+  	np->state=RUNNABLE;
+  	release(&ptable.lock);
+	
   return pid;
 }
 
 
 int join(int pid)
 {
+  acquire(&ptable.lock);
   if (proc->isthread == 1) //check if it's called by a thread
     return -1;
   if (proc->pid == pid)//check if it's called on the parent process's pid 
     return -1;
 
   struct proc *p;
-  int locate_p; //counter to check if we can locate the input "pid" in the process table
+  //int locate_p; //counter to check if we can locate the input "pid" in the process table
   int havekids, p_pid;
 
-  acquire(&ptable.lock);
-  locate_p = 0;
+  
+  int locate_p = 0;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ 
 	//loop through process table to look for struct proc with pid that matches the input pid 
 	if (p->pid == pid){
@@ -636,6 +634,7 @@ int join(int pid)
 	locate_p++; 
   }
   if (locate_p == 0) {
+        release(&ptable.lock);
 	return -1;
   }
   
@@ -650,7 +649,7 @@ int join(int pid)
         // Found one.
         p_pid = p->pid;
         //do not free addr space since it is called by a thread
-        //kfree(p->kstack);
+        kfree(p->kstack);
         p->kstack = 0;
         //freevm(p->pgdir);
         p->state = UNUSED;

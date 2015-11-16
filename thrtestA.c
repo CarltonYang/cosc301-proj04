@@ -31,11 +31,15 @@ int main(int argc, char *argv[])
   lock_init(&xlock);
 
   int arg = num_threads / 2;
+printf(1, "Here1\n");
+
 
   int thread_pid = thread_create(spawner, (void *)arg);
   printf(1, "thread_pid %d\n", thread_pid);
   assert(thread_pid > 0);
 
+
+printf(1, "Here2\n");
   for(i = 0; i < arg; i++) {
     int thread_pid = thread_create(worker, (void *)arg);
     printf(1, "i: %d thread_pid %d\n", i, thread_pid);
