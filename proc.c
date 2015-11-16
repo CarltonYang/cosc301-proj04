@@ -621,7 +621,7 @@ int join(int pid)
   //int locate_p; //counter to check if we can locate the input "pid" in the process table
   int havekids, p_pid;
 
-  
+ 
   int locate_p = 0;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ 
 	//loop through process table to look for struct proc with pid that matches the input pid 
@@ -645,7 +645,7 @@ int join(int pid)
       if(p->parent != proc || p->isthread != 1)
         continue;
       havekids = 1;
-      if(p->state == ZOMBIE){
+      if((pid==-1 && p->state == ZOMBIE) || (p->state == ZOMBIE && p->pid==pid)){
         // Found one.
         p_pid = p->pid;
         //do not free addr space since it is called by a thread
