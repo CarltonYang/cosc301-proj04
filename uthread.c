@@ -39,16 +39,28 @@ tTuple List[64];
 int i =0;
 
 int thread_join(int pid) {
-	
+	int newpid;
 	void* stack;
 	int j;
-        for (j=0;j<1024;j++){
-	  if (List[j].p_pid==pid)
+	if (pid ==-1){
+	  newpid= join(-1);
+	  for (j=0;j<i;j++){
+	    if (List[j].p_pid==newpid)
+	  	  {stack=List[j].stack;}
+	  }
+	}
+        else{
+	  for (j=0;j<i;j++){
+	    if (List[j].p_pid==pid){
 		stack=List[j].stack;
-        }
-        int tid =join(pid);
+		newpid =join(pid);
+		}
+		
+            }
+	}
+        //int 
 	free(stack);
-	return tid;
+	return newpid;
 }
 
 int thread_create(void (*start_routine)(void *), void *arg) {
