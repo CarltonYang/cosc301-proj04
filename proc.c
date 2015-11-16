@@ -13,7 +13,9 @@ struct {
 } ptable;
 
 
+//initiate my own lock
   struct spinlock threadlock;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -26,7 +28,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-  initlock(&threadlock, "thread");
+  initlock(&threadlock, "thread");//initiate lock
 }
 
 
@@ -126,41 +128,27 @@ growproc(int n)
   }
   proc->sz = sz;
   
-
-
-
   //change sz for parent or child threads
+  //acquire lock for sz change
   acquire(&ptable.lock);
   struct proc *p;
   //if thead changes sz, change it for parent and other children
-  if (proc->isthread ==1)
-  {
+  if (proc->isthread ==1){
 	proc->parent->sz=proc->sz;
-	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-	{
-		if (p->parent==proc && p->isthread ==1)
-		{
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+		if (p->parent==proc && p->isthread ==1){
 			p->sz=proc->sz;
 		}
 	}
   }
   //if parent changes sz, just change sz for children
-  else 	
-  {
-	
-		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-		{
-			if (p->parent==proc && p->isthread ==1)
-			{
-				p->sz=proc->sz;
-			}	
-		}
-	
+  else {
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+         	if (p->parent==proc && p->isthread ==1){
+			p->sz=proc->sz;
+		}	
+	}	
   }
-
-
-
-
   release(&ptable.lock);
   release(&threadlock);
   switchuvm(proc);
@@ -202,8 +190,10 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
+
   //make sure that processes are not threads
   np->isthread = 0;
+
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
   np->state = RUNNABLE;
@@ -225,19 +215,17 @@ exit(void)
   if (proc->isthread!=1){
         acquire(&ptable.lock);
   	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-  		  if(p->parent == proc && p->isthread==1){
-  		    p->killed = 1;
-	  	    // Wake process from sleep if necessary.
-	  	    if(p->state == SLEEPING)
-	  	      {p->state = RUNNABLE;}
-	            
-	  	    continue;
-	  	     }
+  		if(p->parent == proc && p->isthread==1){
+  		       p->killed = 1;
+	  	       // Wake process from sleep if necessary.
+	  	       if(p->state == SLEEPING){
+				p->state = RUNNABLE;}
+	  	       continue;
+	  	}
 	 }       
          release(&ptable.lock);
 	 while (join(-1)!=-1){
-		join(-1);
-	 }
+		join(-1);}
   }
   
 
@@ -305,7 +293,6 @@ wait(void)
     //only free addr space if it is not a thread
 	if (p->isthread !=1)
 	{
-        
 	freevm(p->pgdir);
 	}
   	kfree(p->kstack);
@@ -556,17 +543,25 @@ clone(int fcn, int arg, int stack)
   if((np = allocproc()) == 0){
     cprintf( "alloc failure \n");
     return -1;}
+  
   //check if stack is one page sized and page aligned
-
+  //also make sure fcn is not 0
   if ((stack% PGSIZE)!=0 ||stack==0 ||fcn==0){
 	cprintf("argument check failure \n");
 	return -1;}
   
   np->pgdir = proc->pgdir;
   np->sz = proc->sz;
-  np->parent = proc;
+
+  //make sure when a thread calls clone, parent is its parent process
+  struct proc *pp;
+  pp=proc;
+  while (pp->isthread ==1){
+  	pp= pp->parent;}
+  np->parent = pp;
+
   *np->tf = *proc->tf;
-  //np->stack=stack;
+  
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
@@ -579,31 +574,26 @@ clone(int fcn, int arg, int stack)
  
   pid = np->pid;
   np->isthread= 1;
-  // lock to force the compiler to emit the np->state write last.
-  /*
-  acquire(&ptable.lock);
-  np->state = RUNNABLE;
-  release(&ptable.lock);
-  */
+ 
   
-//temporary array to copy into the bottom of news tack 
-//for the thread(i.e.,to the high address in stack 
-//page,since the stack grows downward) 
-	uint ustack[2];
-	uint sp=stack+PGSIZE; 
-	ustack[0]=0xffffffff;//fakereturnPC
-	ustack[1]=arg;
-	sp-=8;//stack grows down by 2 ints/8 bytes 
-	if(copyout(np->pgdir,sp,ustack,8)<0){ 
+  //temporary array to copy into the bottom of news tack 
+  //for the thread(i.e.,to the high address in stack 
+  //page,since the stack grows downward) 
+  uint ustack[2];
+  uint sp=stack+PGSIZE; 
+  ustack[0]=0xffffffff;//fakereturnPC
+  ustack[1]=arg;
+  sp-=8;//stack grows down by 2 ints/8 bytes 
+  if(copyout(np->pgdir,sp,ustack,8)<0){ 
 	//failed to copy bottom of stack into newtask
- 	 cprintf( "copy stack failure \n");
-		return-1; }
-	np->tf->eip=fcn; 
-	np->tf->esp=sp; 
-	switchuvm(np); 
-        acquire(&ptable.lock);
-  	np->state=RUNNABLE;
-  	release(&ptable.lock);
+    cprintf( "copy stack failure \n");
+    return-1; }
+  np->tf->eip=fcn; 
+  np->tf->esp=sp; 
+  switchuvm(np); 
+  acquire(&ptable.lock);
+  np->state=RUNNABLE;
+  release(&ptable.lock);
 	
   return pid;
 }
@@ -625,7 +615,7 @@ int join(int pid)
   int locate_p = 0;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ 
 	//loop through process table to look for struct proc with pid that matches the input pid 
-	if (p->pid == pid){
+	if (p->pid == pid && p->parent==proc && p->isthread==1){
 		locate_p ++;
 		break;
 	}
@@ -638,6 +628,7 @@ int join(int pid)
 	return -1;
   }
   
+
   for(;;){
     // Scan through table looking for zombie children.
     havekids = 0;

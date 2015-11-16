@@ -16,27 +16,24 @@
 
 
 void lock_init(lock_t *lock) {
-  lock->locked = 0;
-  }
+  lock->locked = 0;}
 
 void lock_acquire(lock_t *lock) {
- 
-  while(xchg(&lock->locked, 1) != 0);
-}
+  while(xchg(&lock->locked, 1) != 0);}
 
 void lock_release(lock_t *lock) {
+  xchg(&lock->locked, 0);}
 
-  xchg(&lock->locked, 0);
 
-}
-
+//global variable to keep track of stacks
 typedef struct {
     int p_pid;
     void* stack;
 } tTuple;
 
 tTuple List[64];
-int i =0;
+int stacknum =0;
+
 
 int thread_join(int pid) {
 	int newpid;
@@ -44,13 +41,14 @@ int thread_join(int pid) {
 	int j;
 	if (pid ==-1){
 	  newpid= join(-1);
-	  for (j=0;j<i;j++){
+	  if (newpid ==-1){ return -1;}
+	  for (j=0;j<64;j++){
 	    if (List[j].p_pid==newpid)
 	  	  {stack=List[j].stack;}
 	  }
 	}
         else{
-	  for (j=0;j<i;j++){
+	  for (j=0;j<64;j++){
 	    if (List[j].p_pid==pid){
 		stack=List[j].stack;
 		newpid =join(pid);
@@ -81,13 +79,10 @@ int thread_create(void (*start_routine)(void *), void *arg) {
     return -1;
   }
   
-  //printf(1,"tid: %d\n",tid);
-  List[i].p_pid=tid;
-  //printf(1,"pid: %d\n",List[i].p_pid);
-  //printf(1,"stackb: %d\n",stack);
-  List[i].stack=stack;
-  //printf(1,"stackb: %d\n",List[i].stack);
-  i++;
+  //update global variable and counter
+  List[stacknum].p_pid=tid;
+  List[stacknum].stack=stack;
+  stacknum++;
   return tid;
 }
 
