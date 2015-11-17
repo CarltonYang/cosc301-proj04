@@ -547,7 +547,7 @@ clone(int fcn, int arg, int stack)
   //check if stack is one page sized and page aligned
   //also make sure fcn is not 0
   if ((stack% PGSIZE)!=0 ||stack==0 ||fcn==0){
-	cprintf("argument check failure \n");
+	//cprintf("argument check failure \n");
 	return -1;}
   
   np->pgdir = proc->pgdir;

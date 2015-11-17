@@ -6,7 +6,7 @@
 #include "param.h"
 #include "mmu.h"
 #include "proc.h"
-
+#include "spinlock.h"
 #include "memlayout.h"
 
 #include <stddef.h>
@@ -14,6 +14,11 @@
  * This is where you'll need to implement the user-level functions
  */
 
+typedef struct  {
+  uint value;
+  uint active;
+  struct spinlock lock_t;
+}semaphore_t;
 
 void lock_init(lock_t *lock) {
   lock->locked = 0;}
