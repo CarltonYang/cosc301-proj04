@@ -13,12 +13,14 @@
 /*
  * This is where you'll need to implement the user-level functions
  */
+void semaphore_init(){
+  }
 
-typedef struct  {
-  uint value;
-  uint active;
-  struct spinlock lock_t;
-}semaphore_t;
+void semaphore_wait(){
+  }
+
+void semaphore_signal(){
+  }
 
 void lock_init(lock_t *lock) {
   lock->locked = 0;}

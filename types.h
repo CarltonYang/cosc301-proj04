@@ -7,3 +7,8 @@ typedef struct {
 } lock_t;
 
 
+typedef struct  {
+  uint value;
+  uint active;
+  lock_t mylock;
+}semaphore_t;
